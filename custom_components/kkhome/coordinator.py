@@ -15,15 +15,20 @@ API_ENDPOINT = "https://api.kksecurityhome.com/v3/user/device/list"
 class KKHomeDataUpdateCoordinator(DataUpdateCoordinator):
     """Data update coordinator for KK Home devices."""
 
-    def __init__(self, hass, token: str):
+    def __init__(self, hass, entry):
         """Initialize coordinator."""
-        self.token = token
+        self.entry = entry
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
+
+    @property
+    def token(self) -> str:
+        """Return the current token from config entry data."""
+        return self.entry.data.get("token")
 
     async def _async_update_data(self):
         """Fetch data from KK Home API."""
