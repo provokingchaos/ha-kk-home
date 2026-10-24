@@ -12,13 +12,52 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-async def validate_input(hass: HomeAssistant, data: dict) -> dict:
-    """Validate the user input allows us to connect."""
+async def async_authenticate(username: str, password: str) -> str:
+    """Authenticate with KK Home API using credentials to obtain a token."""
+    url = "https://api.kksecurityhome.com/v3/user/login"  # Adjust endpoint if login path differs
     headers = {
         "Host": "api.kksecurityhome.com",
         "k-tenant": "kawden",
         "k-version": "3.5.0",
-        "token": data["token"],
+        "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
+        "phoneName": "iPhone19,3",
+        "k-language": "en_US",
+        "k-signv": "1.0.0",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "username": username,
+        "password": password
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload, timeout=10) as response:
+            body_bytes = await response.read()
+            res = json.loads(body_bytes.decode("utf-8"))
+            
+            if response.status != 200 or res.get("code") != 200:
+                raise InvalidAuth
+            
+            # Extract the token from the login response payload
+            token = res.get("data", {}).get("token") or res.get("token")
+            if not token:
+                raise InvalidAuth
+            return token
+
+async def validate_input(hass: HomeAssistant, data: dict) -> dict:
+    """Validate user credentials or token input."""
+    token = data.get("token")
+    
+    # If user provided username/password instead of token, authenticate first
+    if not token and data.get("username") and data.get("password"):
+        token = await async_authenticate(data["username"], data["password"])
+        data["token"] = token
+
+    headers = {
+        "Host": "api.kksecurityhome.com",
+        "k-tenant": "kawden",
+        "k-version": "3.5.0",
+        "token": token,
         "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
         "phoneName": "iPhone19,3",
         "k-language": "en_US",
@@ -27,36 +66,12 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     }
     
     url = "https://api.kksecurityhome.com/v3/user/device/list"
-    
-    _LOGGER.error("KK Home: Attempting connection validation to API...")
-    
     async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url, headers=headers, timeout=10) as response:
-                # Read raw payload bytes directly, avoiding aiohttp response.json() mimetype checks
-                body_bytes = await response.read()
-                response_text = body_bytes.decode("utf-8")
-                
-                _LOGGER.error("KK Home API Response - Status: %s, Body: %s", response.status, response_text)
-                
-                if response.status != 200:
-                    raise InvalidAuth
-                
-                try:
-                    res = json.loads(response_text)
-                except json.JSONDecodeError as jde:
-                    _LOGGER.error("Failed to parse response body as JSON: %s", jde)
-                    raise InvalidAuth
-
-                if res.get("code") != 200:
-                    raise InvalidAuth
-                    
-        except aiohttp.ClientError as err:
-            _LOGGER.error("KK Home ClientError connecting to API: %s", err)
-            raise CannotConnect
-        except Exception as err:
-            _LOGGER.error("KK Home Unexpected error during validation: %s", err)
-            raise CannotConnect
+        async with session.post(url, headers=headers, timeout=10) as response:
+            body_bytes = await response.read()
+            res = json.loads(body_bytes.decode("utf-8"))
+            if response.status != 200 or res.get("code") != 200:
+                raise InvalidAuth
 
     return {"title": "KK Home"}
 
@@ -74,20 +89,17 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=info["title"], data=user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except Exception as ex:
-                _LOGGER.error("KK Home Config Flow unexpected exception: %s", ex)
+            except Exception:
                 errors["base"] = "cannot_connect"
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({vol.Required("token"): str}),
+            data_schema=vol.Schema({
+                vol.Required("username"): str,
+                vol.Required("password"): str,
+            }),
             errors=errors,
         )
 
 class InvalidAuth(Exception):
     """Error to indicate there is invalid auth."""
-
-class CannotConnect(Exception):
-    """Error to indicate we cannot connect."""
