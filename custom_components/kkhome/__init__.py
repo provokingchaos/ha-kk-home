@@ -14,10 +14,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up KK Home from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Retrieve the token stored in entry.data (captured or fetched via login)
-    token = entry.data.get("token")
-    
-    coordinator = KKHomeDataUpdateCoordinator(hass, token)
+    coordinator = KKHomeDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
