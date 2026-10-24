@@ -1,5 +1,6 @@
 """Config flow for KK Home integration."""
 import logging
+import json
 import voluptuous as vol
 import aiohttp
 
@@ -38,7 +39,13 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
                 if response.status != 200:
                     raise InvalidAuth
                 
-                res = await response.json()
+                # Parse JSON safely using python's json library to bypass strict aiohttp mimetype checks
+                try:
+                    res = json.loads(response_text)
+                except json.JSONDecodeError as jde:
+                    _LOGGER.error("Failed to parse response body as JSON: %s", jde)
+                    raise InvalidAuth
+
                 if res.get("code") != 200:
                     raise InvalidAuth
                     
