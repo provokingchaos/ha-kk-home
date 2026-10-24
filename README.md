@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="KK Home Logo" width="100">
+  <img src="https://raw.githubusercontent.com/provokingchaos/ha-kk-home/refs/heads/main/icon.png" alt="KK Home Logo" width="100">
 </p>
 
 # KK Home Integration for Home Assistant
