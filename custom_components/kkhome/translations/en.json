@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to KK Home",
+        "description": "Enter your captured KK Home JWT token.",
+        "data": {
+          "token": "API Token"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid authentication token. Check your token and try again.",
+      "cannot_connect": "Failed to connect to KK Home API."
+    }
+  }
+}
