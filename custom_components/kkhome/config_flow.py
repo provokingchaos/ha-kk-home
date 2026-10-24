@@ -13,7 +13,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 async def async_authenticate(username: str, password: str) -> str:
-    """Authenticate with KK Home API using credentials to obtain a token."""
+    """Authenticate with KK Home API using email/username and password."""
     url = "https://api.kksecurityhome.com/v3/user/login/get-user-by-mail"
     headers = {
         "Host": "api.kksecurityhome.com",
@@ -25,9 +25,6 @@ async def async_authenticate(username: str, password: str) -> str:
         "k-signv": "1.0.0",
         "Content-Type": "application/json",
     }
-    
-    # Note: If the backend strictly requires app-side AES payload encryption for plain login, 
-    # fallback parameters or standard payload maps are handled here.
     payload = {
         "username": username,
         "password": password
@@ -38,9 +35,8 @@ async def async_authenticate(username: str, password: str) -> str:
             body_bytes = await response.read()
             res = json.loads(body_bytes.decode("utf-8"))
             
-            _LOGGER.debug("KK Home Login Response - Status: %s, Body: %s", response.status, res)
-            
             if response.status != 200 or res.get("code") != 200:
+                _LOGGER.error("KK Home authentication failed: %s", res)
                 raise InvalidAuth
             
             token = res.get("data", {}).get("token") or res.get("token")
@@ -49,16 +45,11 @@ async def async_authenticate(username: str, password: str) -> str:
             return token
 
 async def validate_input(hass: HomeAssistant, data: dict) -> dict:
-    """Validate user credentials or token input."""
-    token = data.get("token")
+    """Validate user credentials against the KK Home API."""
+    token = await async_authenticate(data["username"], data["password"])
     
-    # If username and password are provided, fetch the token dynamically
-    if not token and data.get("username") and data.get("password"):
-        token = await async_authenticate(data["username"], data["password"])
-        data["token"] = token
-
-    if not token:
-        raise InvalidAuth
+    # Temporarily store the resolved token in data for the session entry
+    data["token"] = token
 
     headers = {
         "Host": "api.kksecurityhome.com",
@@ -88,7 +79,7 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Handle the initial step."""
+        """Handle the initial step using username and password."""
         errors = {}
         if user_input is not None:
             try:
@@ -99,13 +90,11 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:
                 errors["base"] = "cannot_connect"
 
-        # Expose both username/password fields and an optional token field as a failsafe
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Optional("username"): str,
-                vol.Optional("password"): str,
-                vol.Optional("token"): str,
+                vol.Required("username"): str,
+                vol.Required("password"): str,
             }),
             errors=errors,
         )
