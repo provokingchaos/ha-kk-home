@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_authenticate(username: str, password: str) -> str:
     """Authenticate with KK Home API using credentials to obtain a token."""
-    url = "https://api.kksecurityhome.com/v3/user/login"  # Adjust endpoint if login path differs
+    url = "https://api.kksecurityhome.com/v3/user/login"
     headers = {
         "Host": "api.kksecurityhome.com",
         "k-tenant": "kawden",
@@ -38,7 +38,6 @@ async def async_authenticate(username: str, password: str) -> str:
             if response.status != 200 or res.get("code") != 200:
                 raise InvalidAuth
             
-            # Extract the token from the login response payload
             token = res.get("data", {}).get("token") or res.get("token")
             if not token:
                 raise InvalidAuth
@@ -48,7 +47,6 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     """Validate user credentials or token input."""
     token = data.get("token")
     
-    # If user provided username/password instead of token, authenticate first
     if not token and data.get("username") and data.get("password"):
         token = await async_authenticate(data["username"], data["password"])
         data["token"] = token
