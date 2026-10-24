@@ -1,8 +1,12 @@
 """Support for KK Home locks."""
+import logging
+import aiohttp
 from homeassistant.components.lock import LockEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up KK Home locks from a config entry."""
@@ -53,10 +57,50 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
 
     async def async_lock(self, **kwargs):
         """Send lock command."""
-        # Implement API call for locking here
-        pass
+        headers = {
+            "Host": "api.kksecurityhome.com",
+            "k-tenant": "kawden",
+            "k-version": "3.5.0",
+            "token": self.coordinator.token,
+            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
+            "phoneName": "iPhone19,3",
+            "k-language": "en_US",
+            "k-signv": "1.0.0",
+            "Content-Type": "application/json",
+        }
+        url = "https://api.kksecurityhome.com/v3/gateway/set-lock-close"
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, headers=headers, json={}, timeout=10) as response:
+                    if response.status == 200:
+                        await self.coordinator.async_request_refresh()
+                    else:
+                        _LOGGER.error("Failed to lock device, status: %s", response.status)
+            except Exception as ex:
+                _LOGGER.error("Failed to lock device: %s", ex)
 
     async def async_unlock(self, **kwargs):
         """Send unlock command."""
-        # Implement API call for unlocking here
-        pass
+        headers = {
+            "Host": "api.kksecurityhome.com",
+            "k-tenant": "kawden",
+            "k-version": "3.5.0",
+            "token": self.coordinator.token,
+            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
+            "phoneName": "iPhone19,3",
+            "k-language": "en_US",
+            "k-signv": "1.0.0",
+            "Content-Type": "application/json",
+        }
+        url = "https://api.kksecurityhome.com/v3/gateway/set-lock-open"
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, headers=headers, json={}, timeout=10) as response:
+                    if response.status == 200:
+                        await self.coordinator.async_request_refresh()
+                    else:
+                        _LOGGER.error("Failed to unlock device, status: %s", response.status)
+            except Exception as ex:
+                _LOGGER.error("Failed to unlock device: %s", ex)
