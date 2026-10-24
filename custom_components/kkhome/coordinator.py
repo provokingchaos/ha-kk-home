@@ -48,7 +48,7 @@ class KKHomeDataUpdateCoordinator(DataUpdateCoordinator):
                     if response.status != 200:
                         raise UpdateFailed(f"Error communicating with API: Status {response.status}")
                     
-                    # Read raw bytes to avoid aiohttp strict content-type JSON checking
+                    # Read raw bytes to bypass aiohttp strict content-type JSON checking
                     body_bytes = await response.read()
                     response_text = body_bytes.decode("utf-8")
                     
@@ -92,8 +92,8 @@ class KKHomeDataUpdateCoordinator(DataUpdateCoordinator):
                         "id": sub_esn,
                         "master_sn": esn,
                         "name": sub.get("lockNickname", "KK Lock"),
-                        "open_status": sub.get("openStatus"),  # 1 = Locked, 2 = Unlocked
-                        "battery": sub.get("power"),          # Battery percentage
+                        "open_status": sub.get("openStatus"),
+                        "battery": sub.get("power"),
                         "firmware": sub.get("lockFirmwareVersion"),
                         "online": sub.get("online") == "1",
                         "rssi": sub.get("rssi"),
