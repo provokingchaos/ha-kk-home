@@ -73,9 +73,9 @@ custom_components/
 
 | Platform | Entity Type | API Mapping | Description |
 | :--- | :--- | :--- | :--- |
-| Lock | lock.* | subDevices[0].openStatus | 1 = Locked, 2 (or 0) = Unlocked |
-| Switch | switch.*_power | gwPowerStatus | Controls gateway / outlet power state |
-| Sensor | sensor.*_battery | subDevices[0].power | Reports lock battery percentage (0–100%) |
+| **Lock** | `lock.*` | `subDevices[0].openStatus` | `1` = Locked, `2` (or `0`) = Unlocked (Instant Refresh) |
+| **Switch** | `switch.*_power` | `gwPowerStatus` | Controls gateway / outlet power state |
+| **Sensor** | `sensor.*_battery` | `subDevices[0].power` | Reports lock battery percentage (0–100%) |
 
 ## Troubleshooting
 
