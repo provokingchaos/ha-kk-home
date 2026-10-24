@@ -8,6 +8,6 @@
   "integration_type": "hub",
   "issue_tracker": "https://github.com/provokingchaos/ha-kk-home/issues",
   "loggers": ["custom_components.kkhome"],
-  "requirements": [],
+  "requirements": ["bleak>=0.22.3"],
   "version": "1.0.0"
 }
