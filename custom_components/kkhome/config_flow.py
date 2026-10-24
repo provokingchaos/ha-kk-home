@@ -26,13 +26,23 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     }
     
     url = "https://api.kksecurityhome.com/v3/user/device/list"
+    
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, timeout=10) as response:
-            if response.status != 200:
-                raise InvalidAuth
-            res = await response.json()
-            if res.get("code") != 200:
-                raise InvalidAuth
+        try:
+            async with session.post(url, headers=headers, timeout=10) as response:
+                response_text = await response.text()
+                _LOGGER.debug("KK Home API Response - Status: %s, Body: %s", response.status, response_text)
+                
+                if response.status != 200:
+                    raise InvalidAuth
+                
+                res = await response.json()
+                if res.get("code") != 200:
+                    raise InvalidAuth
+                    
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Connection error connecting to KK Home API: %s", err)
+            raise CannotConnect
 
     return {"title": "KK Home"}
 
@@ -50,7 +60,9 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=info["title"], data=user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  // pylint: disable=broad-except
                 errors["base"] = "cannot_connect"
 
         return self.async_show_form(
@@ -61,3 +73,6 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class InvalidAuth(Exception):
     """Error to indicate there is invalid auth."""
+
+class CannotConnect(Exception):
+    """Error to indicate we cannot connect."""
