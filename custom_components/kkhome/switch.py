@@ -1,7 +1,6 @@
-"""Support for KK Home gateway power switch (outlet/gateway status)."""
+"""Support for KK Home gateway power switches."""
 import logging
 import json
-import time
 import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -11,7 +10,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up KK Home gateway switch from a config entry."""
+    """Set up KK Home switches from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
 
@@ -47,7 +46,8 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
     @property
     def name(self):
         """Return the name of the switch."""
-        return f"{self.coordinator.data['gateways'].get(self.gw_id, {}).get('name')} Power"
+        gw_name = self.coordinator.data["gateways"].get(self.gw_id, {}).get("name", "KK Wi-Fi Bridge")
+        return f"{gw_name} Power"
 
     @property
     def is_on(self):
@@ -56,15 +56,15 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
         return gw_data.get("power_status") == 1
 
     async def async_turn_on(self, **kwargs):
-        """Turn the gateway power on."""
+        """Turn the switch on."""
         await self._set_power(1)
 
     async def async_turn_off(self, **kwargs):
-        """Turn the gateway power off."""
+        """Turn the switch off."""
         await self._set_power(0)
 
     async def _set_power(self, status: int):
-        """Helper to send power command to gateway."""
+        """Send power command to gateway."""
         headers = {
             "Host": "api.kksecurityhome.com",
             "k-tenant": "kawden",
@@ -77,13 +77,8 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
             "Content-Type": "application/json",
         }
         url = "https://api.kksecurityhome.com/v3/gateway/set-gateway-power"
+        payload = {"esn": self.gw_id, "powerStatus": status}
         
-        payload = {
-            "powerStatus": status,
-            "esn": self.gw_id,
-            "reqTime": str(int(time.time() * 1000))
-        }
-
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.post(url, headers=headers, json=payload, timeout=10) as response:
@@ -93,6 +88,6 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
                     if response.status == 200 and res.get("code") == 200:
                         await self.coordinator.async_request_refresh()
                     else:
-                        _LOGGER.error("Failed to set gateway power, response: %s", res)
+                        _LOGGER.error("Failed to change gateway power state, response: %s", res)
             except Exception as ex:
-                _LOGGER.error("Failed to set gateway power: %s", ex)
+                _LOGGER.error("Failed to change gateway power state: %s", ex)
