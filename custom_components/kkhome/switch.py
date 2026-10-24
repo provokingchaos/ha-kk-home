@@ -1,5 +1,6 @@
 """Support for KK Home gateway power switch (outlet/gateway status)."""
 import logging
+import json
 import time
 import aiohttp
 from homeassistant.components.switch import SwitchEntity
@@ -86,9 +87,12 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.post(url, headers=headers, json=payload, timeout=10) as response:
-                    if response.status == 200:
+                    body_bytes = await response.read()
+                    res = json.loads(body_bytes.decode("utf-8"))
+                    
+                    if response.status == 200 and res.get("code") == 200:
                         await self.coordinator.async_request_refresh()
                     else:
-                        _LOGGER.error("Failed to set gateway power, status: %s", response.status)
+                        _LOGGER.error("Failed to set gateway power, response: %s", res)
             except Exception as ex:
                 _LOGGER.error("Failed to set gateway power: %s", ex)
