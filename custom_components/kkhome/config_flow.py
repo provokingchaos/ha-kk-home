@@ -35,10 +35,13 @@ async def async_authenticate(username: str, password: str) -> str:
             body_bytes = await response.read()
             res = json.loads(body_bytes.decode("utf-8"))
             
+            _LOGGER.error("KK Home Login Response - Status: %s, Body: %s", response.status, res)
+            
             if response.status != 200 or res.get("code") != 200:
                 raise InvalidAuth
             
-            # Extract the token safely from the mail-login payload response
+            # The app login response wraps the token inside the JWT payload header or direct data structure
+            # Based on the captured WebSocket protocol/token string structure, we extract the jwt token directly
             token = res.get("data", {}).get("token") or res.get("token")
             if not token:
                 raise InvalidAuth
@@ -48,10 +51,12 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     """Validate user credentials or token input."""
     token = data.get("token")
     
-    # If user provided username/password, fetch the token dynamically
     if not token and data.get("username") and data.get("password"):
         token = await async_authenticate(data["username"], data["password"])
         data["token"] = token
+
+    if not token:
+        raise InvalidAuth
 
     headers = {
         "Host": "api.kksecurityhome.com",
@@ -92,13 +97,11 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:
                 errors["base"] = "cannot_connect"
 
-        # Expose both username/password and an optional token field to prevent UI lockouts
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Optional("username"): str,
-                vol.Optional("password"): str,
-                vol.Optional("token"): str,
+                vol.Required("username"): str,
+                vol.Required("password"): str,
             }),
             errors=errors,
         )
