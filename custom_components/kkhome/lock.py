@@ -1,4 +1,4 @@
-"""Support for KK Home locks with forced instant state updates."""
+"""Support for KK Home locks with persistent optimistic state until confirmed."""
 
 from __future__ import annotations
 
@@ -57,18 +57,21 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
 
     @property
     def is_locked(self) -> bool | None:
-        """Return true if lock is locked, prioritizing optimistic state."""
+        """Return true if lock is locked, holding optimistic state until poll confirms."""
+        status = self._lock_data.get("open_status")
+        real_is_locked = None if status is None else (int(status) == 1)
+
+        # Automatically clear optimistic state once the real API poll catches up
+        if self._optimistic_is_locked is not None and real_is_locked == self._optimistic_is_locked:
+            self._optimistic_is_locked = None
+
         if self._optimistic_is_locked is not None:
             return self._optimistic_is_locked
 
-        status = self._lock_data.get("open_status")
-        if status is None:
-            return None
-        # openStatus: 1 = Locked, 2 (or 0) = Unlocked
-        return int(status) == 1
+        return real_is_locked
 
     async def async_lock(self, **kwargs) -> None:
-        """Send lock command and force immediate UI state change."""
+        """Send lock command and hold optimistic state until confirmed."""
         self._optimistic_is_locked = True
         self.async_write_ha_state()
 
@@ -79,13 +82,10 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
             self.async_write_ha_state()
             raise
 
-        # Allow a short moment for the gateway to process before clearing optimistic state
         await self.coordinator.async_request_refresh()
-        self._optimistic_is_locked = None
-        self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs) -> None:
-        """Send unlock command and force immediate UI state change."""
+        """Send unlock command and hold optimistic state until confirmed."""
         self._optimistic_is_locked = False
         self.async_write_ha_state()
 
@@ -97,5 +97,3 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
             raise
 
         await self.coordinator.async_request_refresh()
-        self._optimistic_is_locked = None
-        self.async_write_ha_state()
