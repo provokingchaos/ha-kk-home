@@ -64,11 +64,13 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
         return int(status) == 1
 
     async def async_lock(self, **kwargs) -> None:
-        """Send lock command."""
+        """Send lock command and immediately request a state refresh."""
         await self.coordinator.api.async_set_lock(self._lock_data, lock=True)
+        # Force an immediate poll to update UI state without waiting 30 seconds
         await self.coordinator.async_request_refresh()
 
     async def async_unlock(self, **kwargs) -> None:
-        """Send unlock command."""
+        """Send unlock command and immediately request a state refresh."""
         await self.coordinator.api.async_set_lock(self._lock_data, lock=False)
+        # Force an immediate poll to update UI state without waiting 30 seconds
         await self.coordinator.async_request_refresh()
