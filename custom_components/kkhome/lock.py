@@ -1,5 +1,6 @@
 """Support for KK Home locks."""
 import logging
+import json
 import aiohttp
 from homeassistant.components.lock import LockEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -73,10 +74,13 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.post(url, headers=headers, json={}, timeout=10) as response:
-                    if response.status == 200:
+                    body_bytes = await response.read()
+                    res = json.loads(body_bytes.decode("utf-8"))
+                    
+                    if response.status == 200 and res.get("code") == 200:
                         await self.coordinator.async_request_refresh()
                     else:
-                        _LOGGER.error("Failed to lock device, status: %s", response.status)
+                        _LOGGER.error("Failed to lock device, response: %s", res)
             except Exception as ex:
                 _LOGGER.error("Failed to lock device: %s", ex)
 
@@ -98,9 +102,12 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.post(url, headers=headers, json={}, timeout=10) as response:
-                    if response.status == 200:
+                    body_bytes = await response.read()
+                    res = json.loads(body_bytes.decode("utf-8"))
+                    
+                    if response.status == 200 and res.get("code") == 200:
                         await self.coordinator.async_request_refresh()
                     else:
-                        _LOGGER.error("Failed to unlock device, status: %s", response.status)
+                        _LOGGER.error("Failed to unlock device, response: %s", res)
             except Exception as ex:
                 _LOGGER.error("Failed to unlock device: %s", ex)
