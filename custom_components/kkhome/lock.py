@@ -1,7 +1,8 @@
 """Support for KK Home locks."""
+
+from __future__ import annotations
+
 import logging
-import json
-import aiohttp
 from homeassistant.components.lock import LockEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -9,105 +10,65 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up KK Home locks from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-
-    for lock_id in coordinator.data.get("locks", {}):
-        entities.append(KKHomeLock(coordinator, lock_id))
-
+    entities = [
+        KKHomeLock(coordinator, lock_id)
+        for lock_id in coordinator.data.get("locks", {})
+    ]
     async_add_entities(entities)
+
 
 class KKHomeLock(CoordinatorEntity, LockEntity):
     """Representation of a KK Home Lock."""
 
-    def __init__(self, coordinator, lock_id):
+    def __init__(self, coordinator, lock_id: str) -> None:
         """Initialize the lock."""
         super().__init__(coordinator)
         self.lock_id = lock_id
 
     @property
+    def _lock_data(self) -> dict:
+        return self.coordinator.data.get("locks", {}).get(self.lock_id, {})
+
+    @property
     def device_info(self):
         """Return device information."""
-        lock_data = self.coordinator.data["locks"].get(self.lock_id, {})
         return {
             "identifiers": {(DOMAIN, self.lock_id)},
-            "name": lock_data.get("name", "KK Lock"),
+            "name": self._lock_data.get("name", "KK Lock"),
             "manufacturer": "KK Home",
             "model": "VE019",
-            "sw_version": lock_data.get("firmware"),
+            "sw_version": self._lock_data.get("firmware"),
         }
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return unique ID."""
         return f"{self.lock_id}_lock"
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the lock."""
-        return self.coordinator.data["locks"].get(self.lock_id, {}).get("name")
+        return self._lock_data.get("name", "KK Lock")
 
     @property
-    def is_locked(self):
+    def is_locked(self) -> bool | None:
         """Return true if lock is locked."""
-        lock_data = self.coordinator.data["locks"].get(self.lock_id, {})
-        # openStatus: 1 = Locked, 2 = Unlocked based on captures
-        return lock_data.get("open_status") == 1
+        status = self._lock_data.get("open_status")
+        if status is None:
+            return None
+        # openStatus: 1 = Locked, 2 (or 0) = Unlocked
+        return int(status) == 1
 
-    async def async_lock(self, **kwargs):
+    async def async_lock(self, **kwargs) -> None:
         """Send lock command."""
-        headers = {
-            "Host": "api.kksecurityhome.com",
-            "k-tenant": "kawden",
-            "k-version": "3.5.0",
-            "token": self.coordinator.token,
-            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
-            "phoneName": "iPhone19,3",
-            "k-language": "en_US",
-            "k-signv": "1.0.0",
-            "Content-Type": "application/json",
-        }
-        url = "https://api.kksecurityhome.com/v3/gateway/set-lock-close"
-        
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, headers=headers, json={}, timeout=10) as response:
-                    body_bytes = await response.read()
-                    res = json.loads(body_bytes.decode("utf-8"))
-                    
-                    if response.status == 200 and res.get("code") == 200:
-                        await self.coordinator.async_request_refresh()
-                    else:
-                        _LOGGER.error("Failed to lock device, response: %s", res)
-            except Exception as ex:
-                _LOGGER.error("Failed to lock device: %s", ex)
+        await self.coordinator.api.async_set_lock(self._lock_data, lock=True)
+        await self.coordinator.async_request_refresh()
 
-    async def async_unlock(self, **kwargs):
+    async def async_unlock(self, **kwargs) -> None:
         """Send unlock command."""
-        headers = {
-            "Host": "api.kksecurityhome.com",
-            "k-tenant": "kawden",
-            "k-version": "3.5.0",
-            "token": self.coordinator.token,
-            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
-            "phoneName": "iPhone19,3",
-            "k-language": "en_US",
-            "k-signv": "1.0.0",
-            "Content-Type": "application/json",
-        }
-        url = "https://api.kksecurityhome.com/v3/gateway/set-lock-open"
-        
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, headers=headers, json={}, timeout=10) as response:
-                    body_bytes = await response.read()
-                    res = json.loads(body_bytes.decode("utf-8"))
-                    
-                    if response.status == 200 and res.get("code") == 200:
-                        await self.coordinator.async_request_refresh()
-                    else:
-                        _LOGGER.error("Failed to unlock device, response: %s", res)
-            except Exception as ex:
-                _LOGGER.error("Failed to unlock device: %s", ex)
+        await self.coordinator.api.async_set_lock(self._lock_data, lock=False)
+        await self.coordinator.async_request_refresh()
