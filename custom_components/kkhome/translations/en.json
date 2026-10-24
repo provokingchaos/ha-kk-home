@@ -3,14 +3,15 @@
     "step": {
       "user": {
         "title": "Connect to KK Home",
-        "description": "Enter your captured KK Home JWT token.",
+        "description": "Enter your KK Home account credentials.",
         "data": {
-          "token": "API Token"
+          "username": "Email",
+          "password": "Password"
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid authentication token. Check your token and try again.",
+      "invalid_auth": "Invalid email or password. Please try again.",
       "cannot_connect": "Failed to connect to KK Home API."
     }
   }
