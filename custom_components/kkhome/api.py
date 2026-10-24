@@ -120,29 +120,28 @@ class KKHomeApiClient:
         return self._parse_devices(devices_list)
 
     async def async_set_lock(self, lock_info: dict[str, Any], lock: bool) -> None:
-        """Lock or unlock a device forcing the gateway bridge command path."""
+        """Lock or unlock a device using the encrypted gateway command path."""
         esn = lock_info.get("id")
         master_sn = lock_info.get("master_sn")
 
         _LOGGER.debug(
-            "KK Home gateway lock command initiated for lock ESN: %s, master_sn: %s, action: %s",
+            "KK Home gateway encrypted lock command for ESN: %s, master_sn: %s, action: %s",
             esn,
             master_sn,
             "LOCK" if lock else "UNLOCK",
         )
 
-        # Force the gateway command endpoint which routes through the SG3 Wi-Fi bridge
         gw_path = GATEWAY_LOCK_PATH if lock else GATEWAY_UNLOCK_PATH
-        gw_payload: dict[str, Any] = {"esn": esn}
+        payload: dict[str, Any] = {"esn": esn}
         if master_sn:
-            gw_payload["masterSn"] = master_sn
+            payload["masterSn"] = master_sn
 
-        _LOGGER.debug("Sending signed gateway command to path %s: %s", gw_path, gw_payload)
         response = await self._request(
             gw_path,
-            json_body=self._sign_payload(gw_payload),
+            json_body=self._encrypt_payload(payload),
+            extra_headers={_ENCRYPT_DATA_HEADER: _ENCRYPT_DATA_HEADER},
         )
-        _LOGGER.debug("Gateway lock command response: %s", response)
+        _LOGGER.debug("Gateway encrypted lock command response: %s", response)
 
     async def async_set_gateway_power(self, gw_id: str, power_on: bool) -> None:
         """Turn gateway power switch on or off."""
