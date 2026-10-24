@@ -1,107 +1,41 @@
 """Data update coordinator for KK Home."""
-import logging
-import json
+
+from __future__ import annotations
+
 from datetime import timedelta
-import aiohttp
+import logging
+from typing import Any
 
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .api import KKHomeApiClient, KKHomeApiError, KKHomeAuthError
+from .const import DEFAULT_POLL_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-API_ENDPOINT = "https://api.kksecurityhome.com/v3/user/device/list"
 
-class KKHomeDataUpdateCoordinator(DataUpdateCoordinator):
+
+class KKHomeDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Data update coordinator for KK Home devices."""
 
-    def __init__(self, hass, entry):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize coordinator."""
         self.entry = entry
+        self.api = KKHomeApiClient(hass, dict(entry.data))
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=DEFAULT_POLL_INTERVAL),
         )
 
-    @property
-    def token(self) -> str:
-        """Return the current token from config entry data."""
-        return self.entry.data.get("token")
-
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch data from KK Home API."""
-        headers = {
-            "Host": "api.kksecurityhome.com",
-            "k-tenant": "kawden",
-            "k-version": "3.5.0",
-            "token": self.token,
-            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
-            "phoneName": "iPhone19,3",
-            "k-language": "en_US",
-            "k-signv": "1.0.0",
-            "Content-Length": "0",
-        }
-
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(API_ENDPOINT, headers=headers, timeout=10) as response:
-                    if response.status == 401:
-                        raise ConfigEntryAuthFailed("Authentication token expired or invalid.")
-                    
-                    if response.status != 200:
-                        raise UpdateFailed(f"Error communicating with API: Status {response.status}")
-                    
-                    # Read raw bytes to bypass aiohttp strict content-type JSON checking
-                    body_bytes = await response.read()
-                    response_text = body_bytes.decode("utf-8")
-                    
-                    try:
-                        data = json.loads(response_text)
-                    except json.JSONDecodeError as jde:
-                        raise UpdateFailed(f"Failed to parse API response as JSON: {jde}")
-                    
-                    if data.get("code") != 200:
-                        raise UpdateFailed(f"API returned error: {data.get('msg')}")
-                    
-                    return self._parse_devices(data.get("data", []))
-
-            except aiohttp.ClientError as error:
-                raise UpdateFailed(f"Error fetching data: {error}")
-
-    def _parse_devices(self, raw_devices: list) -> dict:
-        """Parse raw device list into structured dictionary."""
-        parsed_data = {
-            "gateways": {},
-            "locks": {}
-        }
-
-        for device in raw_devices:
-            esn = device.get("wifiSN") or device.get("esn")
-            if device.get("deviceType") == "GATEWAY":
-                parsed_data["gateways"][esn] = {
-                    "id": esn,
-                    "name": device.get("lockNickname", "KK Wi-Fi Bridge"),
-                    "power_status": device.get("gwPowerStatus"),
-                    "led_status": device.get("gwLedStatus"),
-                    "power": device.get("power"),
-                    "ip": device.get("ip"),
-                    "wifi_signal": device.get("wifiSignal"),
-                    "online": device.get("online") == "1",
-                }
-
-                for sub in device.get("subDevices", []):
-                    sub_esn = sub.get("wifiSN") or sub.get("mac")
-                    parsed_data["locks"][sub_esn] = {
-                        "id": sub_esn,
-                        "master_sn": esn,
-                        "name": sub.get("lockNickname", "KK Lock"),
-                        "open_status": sub.get("openStatus"),
-                        "battery": sub.get("power"),
-                        "firmware": sub.get("lockFirmwareVersion"),
-                        "online": sub.get("online") == "1",
-                        "rssi": sub.get("rssi"),
-                    }
-
-        return parsed_data
+        try:
+            return await self.api.async_get_devices()
+        except KKHomeAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except KKHomeApiError as err:
+            raise UpdateFailed(str(err)) from err
