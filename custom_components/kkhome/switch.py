@@ -1,8 +1,13 @@
 """Support for KK Home gateway power switch (outlet/gateway status)."""
+import logging
+import time
+import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up KK Home gateway switch from a config entry."""
@@ -51,10 +56,39 @@ class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn the gateway power on."""
-        # Implement POST /v3/gateway/set-gateway-power with powerStatus: 1
-        pass
+        await self._set_power(1)
 
     async def async_turn_off(self, **kwargs):
         """Turn the gateway power off."""
-        # Implement POST /v3/gateway/set-gateway-power with powerStatus: 0
-        pass
+        await self._set_power(0)
+
+    async def _set_power(self, status: int):
+        """Helper to send power command to gateway."""
+        headers = {
+            "Host": "api.kksecurityhome.com",
+            "k-tenant": "kawden",
+            "k-version": "3.5.0",
+            "token": self.coordinator.token,
+            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
+            "phoneName": "iPhone19,3",
+            "k-language": "en_US",
+            "k-signv": "1.0.0",
+            "Content-Type": "application/json",
+        }
+        url = "https://api.kksecurityhome.com/v3/gateway/set-gateway-power"
+        
+        payload = {
+            "powerStatus": status,
+            "esn": self.gw_id,
+            "reqTime": str(int(time.time() * 1000))
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, headers=headers, json=payload, timeout=10) as response:
+                    if response.status == 200:
+                        await self.coordinator.async_request_refresh()
+                    else:
+                        _LOGGER.error("Failed to set gateway power, status: %s", response.status)
+            except Exception as ex:
+                _LOGGER.error("Failed to set gateway power: %s", ex)
