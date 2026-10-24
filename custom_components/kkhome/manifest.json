@@ -1,0 +1,12 @@
+{
+  "domain": "kkhome",
+  "name": "KK Home",
+  "codeowners": ["@cody"],
+  "documentation": "https://gitlab.com/your-username/ha-kk-home",
+  "issue_tracker": "https://gitlab.com/your-username/ha-kk-home/issues",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "version": "1.0.0"
+}
