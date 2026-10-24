@@ -1,7 +1,8 @@
 """Support for KK Home gateway power switches."""
+
+from __future__ import annotations
+
 import logging
-import json
-import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -9,85 +10,61 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up KK Home switches from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-
-    for gw_id in coordinator.data.get("gateways", {}):
-        entities.append(KKHomeGatewaySwitch(coordinator, gw_id))
-
+    entities = [
+        KKHomeGatewaySwitch(coordinator, gw_id)
+        for gw_id in coordinator.data.get("gateways", {})
+    ]
     async_add_entities(entities)
+
 
 class KKHomeGatewaySwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a KK Home Gateway Power Switch."""
 
-    def __init__(self, coordinator, gw_id):
+    def __init__(self, coordinator, gw_id: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
         self.gw_id = gw_id
 
     @property
+    def _gw_data(self) -> dict:
+        return self.coordinator.data.get("gateways", {}).get(self.gw_id, {})
+
+    @property
     def device_info(self):
         """Return device information."""
-        gw_data = self.coordinator.data["gateways"].get(self.gw_id, {})
         return {
             "identifiers": {(DOMAIN, self.gw_id)},
-            "name": gw_data.get("name", "KK Wi-Fi Bridge"),
+            "name": self._gw_data.get("name", "KK Wi-Fi Bridge"),
             "manufacturer": "KK Home",
             "model": "SGAHA-SG3",
         }
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return unique ID."""
         return f"{self.gw_id}_power"
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name of the switch."""
-        gw_name = self.coordinator.data["gateways"].get(self.gw_id, {}).get("name", "KK Wi-Fi Bridge")
+        gw_name = self._gw_data.get("name", "KK Wi-Fi Bridge")
         return f"{gw_name} Power"
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if switch is on."""
-        gw_data = self.coordinator.data["gateways"].get(self.gw_id, {})
-        return gw_data.get("power_status") == 1
+        return self._gw_data.get("power_status") == 1
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
-        await self._set_power(1)
+        await self.coordinator.api.async_set_gateway_power(self.gw_id, power_on=True)
+        await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
-        await self._set_power(0)
-
-    async def _set_power(self, status: int):
-        """Send power command to gateway."""
-        headers = {
-            "Host": "api.kksecurityhome.com",
-            "k-tenant": "kawden",
-            "k-version": "3.5.0",
-            "token": self.coordinator.token,
-            "User-Agent": "KKHome/3.5.0 (iPhone; iOS 27.0.1; Scale/3.00)",
-            "phoneName": "iPhone19,3",
-            "k-language": "en_US",
-            "k-signv": "1.0.0",
-            "Content-Type": "application/json",
-        }
-        url = "https://api.kksecurityhome.com/v3/gateway/set-gateway-power"
-        payload = {"esn": self.gw_id, "powerStatus": status}
-        
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, headers=headers, json=payload, timeout=10) as response:
-                    body_bytes = await response.read()
-                    res = json.loads(body_bytes.decode("utf-8"))
-                    
-                    if response.status == 200 and res.get("code") == 200:
-                        await self.coordinator.async_request_refresh()
-                    else:
-                        _LOGGER.error("Failed to change gateway power state, response: %s", res)
-            except Exception as ex:
-                _LOGGER.error("Failed to change gateway power state: %s", ex)
+        await self.coordinator.api.async_set_gateway_power(self.gw_id, power_on=False)
+        await self.coordinator.async_request_refresh()
