@@ -8,7 +8,7 @@ from .coordinator import KKHomeDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["lock", "switch"]
+PLATFORMS = ["lock", "switch", "sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up KK Home from a config entry."""
