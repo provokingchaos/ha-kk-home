@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_authenticate(username: str, password: str) -> str:
     """Authenticate with KK Home API using credentials to obtain a token."""
-    url = "https://api.kksecurityhome.com/v3/user/login"
+    url = "https://api.kksecurityhome.com/v3/user/login/get-user-by-mail"
     headers = {
         "Host": "api.kksecurityhome.com",
         "k-tenant": "kawden",
@@ -38,6 +38,7 @@ async def async_authenticate(username: str, password: str) -> str:
             if response.status != 200 or res.get("code") != 200:
                 raise InvalidAuth
             
+            # Extract the token safely from the mail-login payload response
             token = res.get("data", {}).get("token") or res.get("token")
             if not token:
                 raise InvalidAuth
@@ -47,6 +48,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     """Validate user credentials or token input."""
     token = data.get("token")
     
+    # If user provided username/password, fetch the token dynamically
     if not token and data.get("username") and data.get("password"):
         token = await async_authenticate(data["username"], data["password"])
         data["token"] = token
@@ -90,11 +92,13 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:
                 errors["base"] = "cannot_connect"
 
+        # Expose both username/password and an optional token field to prevent UI lockouts
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("username"): str,
-                vol.Required("password"): str,
+                vol.Optional("username"): str,
+                vol.Optional("password"): str,
+                vol.Optional("token"): str,
             }),
             errors=errors,
         )
