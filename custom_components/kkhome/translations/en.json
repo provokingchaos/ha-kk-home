@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to KK Home",
-        "description": "Enter your KK Home account credentials.",
+        "description": "Enter your KK Home account email and password.",
         "data": {
           "username": "Email",
           "password": "Password"
@@ -12,7 +12,10 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password. Please try again.",
-      "cannot_connect": "Failed to connect to KK Home API."
+      "cannot_connect": "Failed to connect to the KK Home API."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
     }
   }
 }
