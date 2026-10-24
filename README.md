@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="KK Home Logo" width="100">
+</p>
+
 # KK Home Integration for Home Assistant
 
 A custom Home Assistant integration for KK Home smart locks (such as the VE019 door lock) and Wi-Fi gateways/bridges (SGAHA-SG3), supporting credential-based authentication, RSA payload encryption/signing, automatic session token refresh, and real-time device state tracking.
