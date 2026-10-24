@@ -1,12 +1,11 @@
 {
   "domain": "kkhome",
   "name": "KK Home",
-  "codeowners": ["@cody"],
-  "documentation": "https://github.com/provokingchaos/ha-kk-home",
-  "issue_tracker": "https://github.com/provokingchaos/ha-kk-home/issues",
+  "codeowners": [],
   "config_flow": true,
-  "dependencies": [],
-  "requirements": [],
+  "documentation": "https://gitlab.com/your-username/ha-kk-home",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://gitlab.com/your-username/ha-kk-home/-/issues",
+  "requirements": [],
   "version": "1.0.0"
 }
