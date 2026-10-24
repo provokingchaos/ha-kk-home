@@ -1,11 +1,13 @@
 {
   "domain": "kkhome",
   "name": "KK Home",
-  "codeowners": [],
+  "codeowners": ["@provokingchaos"],
   "config_flow": true,
   "documentation": "https://github.com/provokingchaos/ha-kk-home",
   "iot_class": "cloud_polling",
+  "integration_type": "hub",
   "issue_tracker": "https://github.com/provokingchaos/ha-kk-home/issues",
+  "loggers": ["custom_components.kkhome"],
   "requirements": [],
   "version": "1.0.0"
 }
