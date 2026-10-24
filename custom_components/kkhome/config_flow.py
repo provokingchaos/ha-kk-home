@@ -33,13 +33,15 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(url, headers=headers, timeout=10) as response:
-                response_text = await response.text()
+                # Read raw payload bytes directly, avoiding aiohttp response.json() mimetype checks
+                body_bytes = await response.read()
+                response_text = body_bytes.decode("utf-8")
+                
                 _LOGGER.error("KK Home API Response - Status: %s, Body: %s", response.status, response_text)
                 
                 if response.status != 200:
                     raise InvalidAuth
                 
-                # Parse JSON safely using python's json library to bypass strict aiohttp mimetype checks
                 try:
                     res = json.loads(response_text)
                 except json.JSONDecodeError as jde:
