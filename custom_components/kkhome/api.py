@@ -120,47 +120,29 @@ class KKHomeApiClient:
         return self._parse_devices(devices_list)
 
     async def async_set_lock(self, lock_info: dict[str, Any], lock: bool) -> None:
-        """Lock or unlock a device with explicit debug instrumentation."""
+        """Lock or unlock a device forcing the gateway bridge command path."""
         esn = lock_info.get("id")
-        user_number_id = lock_info.get("user_number_id")
         master_sn = lock_info.get("master_sn")
 
         _LOGGER.debug(
-            "KK Home lock command initiated for device ESN: %s, master_sn: %s, user_number_id: %s, action: %s",
+            "KK Home gateway lock command initiated for lock ESN: %s, master_sn: %s, action: %s",
             esn,
             master_sn,
-            user_number_id,
             "LOCK" if lock else "UNLOCK",
         )
 
-        # Try the encrypted user-device endpoint first if user_number_id is present
-        if user_number_id is not None:
-            path = LOCK_PATH if lock else UNLOCK_PATH
-            payload = {"esn": esn, "userNumberId": int(user_number_id)}
-            _LOGGER.debug("Sending encrypted lock payload to path %s: %s", path, payload)
-            try:
-                response = await self._request(
-                    path,
-                    json_body=self._encrypt_payload(payload),
-                    extra_headers={_ENCRYPT_DATA_HEADER: _ENCRYPT_DATA_HEADER},
-                )
-                _LOGGER.debug("Encrypted lock command response: %s", response)
-                return
-            except Exception as err:
-                _LOGGER.debug("Encrypted lock command failed (%s), attempting gateway fallback", err)
-
-        # Fallback to signed gateway lock/unlock endpoint
+        # Force the gateway command endpoint which routes through the SG3 Wi-Fi bridge
         gw_path = GATEWAY_LOCK_PATH if lock else GATEWAY_UNLOCK_PATH
         gw_payload: dict[str, Any] = {"esn": esn}
         if master_sn:
             gw_payload["masterSn"] = master_sn
-        
+
         _LOGGER.debug("Sending signed gateway command to path %s: %s", gw_path, gw_payload)
-        gw_response = await self._request(
+        response = await self._request(
             gw_path,
             json_body=self._sign_payload(gw_payload),
         )
-        _LOGGER.debug("Signed gateway command response: %s", gw_response)
+        _LOGGER.debug("Gateway lock command response: %s", response)
 
     async def async_set_gateway_power(self, gw_id: str, power_on: bool) -> None:
         """Turn gateway power switch on or off."""
