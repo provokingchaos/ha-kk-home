@@ -125,7 +125,7 @@ class KKHomeApiClient:
         user_number_id = lock_info.get("user_number_id")
         master_sn = lock_info.get("master_sn")
 
-        # Prefer standard encrypted device endpoint if userNumberId is available
+        # Prefer standard encrypted device endpoint (userNumberId is 0 for owner)
         if user_number_id is not None:
             path = LOCK_PATH if lock else UNLOCK_PATH
             payload = {"esn": esn, "userNumberId": int(user_number_id)}
@@ -240,17 +240,37 @@ class KKHomeApiClient:
         return parsed
 
     def _parse_devices(self, raw_devices: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        """Parse raw device list into gateways and locks."""
+        """Parse raw device list into gateways and locks without losing subDevice live data."""
         parsed_data: dict[str, dict[str, Any]] = {
             "gateways": {},
             "locks": {},
         }
 
+        # Pass 1: Parse top-level standalone LOCK entries (contains userNumberId and bleMac)
         for device in raw_devices:
             esn = str(device.get("wifiSN") or device.get("esn") or device.get("_id") or "")
             if not esn:
                 continue
+            dev_type = str(device.get("deviceType", "")).upper()
+            if dev_type != "GATEWAY" and "subDevices" not in device:
+                parsed_data["locks"][esn] = {
+                    "id": esn,
+                    "master_sn": device.get("masterSn"),
+                    "user_number_id": device.get("userNumberId") if device.get("userNumberId") is not None else 0,
+                    "name": device.get("lockNickname") or device.get("name") or "KK Lock",
+                    "open_status": device.get("openStatus"),
+                    "battery": self._extract_battery(device.get("power") or device.get("battery")),
+                    "firmware": device.get("lockFirmwareVersion"),
+                    "online": str(device.get("online", "1")) == "1",
+                    "rssi": device.get("rssi"),
+                    "raw": device,
+                }
 
+        # Pass 2: Parse GATEWAY entries and overlay live subDevices state (true battery & openStatus)
+        for device in raw_devices:
+            esn = str(device.get("wifiSN") or device.get("esn") or device.get("_id") or "")
+            if not esn:
+                continue
             dev_type = str(device.get("deviceType", "")).upper()
             if dev_type == "GATEWAY" or "subDevices" in device:
                 parsed_data["gateways"][esn] = {
@@ -271,46 +291,43 @@ class KKHomeApiClient:
                     sub_esn = str(sub.get("wifiSN") or sub.get("esn") or sub.get("mac") or "")
                     if not sub_esn:
                         continue
+                    existing = parsed_data["locks"].get(sub_esn, {})
+                    user_num = sub.get("userNumberId")
+                    if user_num is None:
+                        user_num = existing.get("user_number_id")
+                    if user_num is None:
+                        user_num = device.get("userNumberId", 0)
+
+                    sub_battery = self._extract_battery(sub.get("power") or sub.get("battery"))
+                    merged_raw = {**existing.get("raw", {}), **sub}
+
                     parsed_data["locks"][sub_esn] = {
                         "id": sub_esn,
                         "master_sn": esn,
-                        "user_number_id": sub.get("userNumberId") or device.get("userNumberId"),
-                        "name": sub.get("lockNickname") or sub.get("name") or "KK Lock",
-                        "open_status": sub.get("openStatus"),
-                        "battery": self._extract_int(sub.get("power") or sub.get("battery")),
-                        "firmware": sub.get("lockFirmwareVersion"),
+                        "user_number_id": user_num,
+                        "name": sub.get("lockNickname") or existing.get("name") or "KK Lock",
+                        "open_status": sub.get("openStatus", existing.get("open_status")),
+                        "battery": sub_battery if sub_battery is not None else existing.get("battery"),
+                        "firmware": sub.get("lockFirmwareVersion") or existing.get("firmware"),
                         "online": str(sub.get("online", "1")) == "1",
-                        "rssi": sub.get("rssi"),
-                        "raw": sub,
+                        "rssi": sub.get("rssi") or existing.get("rssi"),
+                        "raw": merged_raw,
                     }
-            else:
-                # Top-level lock entry
-                existing = parsed_data["locks"].get(esn, {})
-                parsed_data["locks"][esn] = {
-                    "id": esn,
-                    "master_sn": existing.get("master_sn") or device.get("masterSn"),
-                    "user_number_id": device.get("userNumberId") or existing.get("user_number_id"),
-                    "name": device.get("lockNickname") or device.get("name") or existing.get("name") or "KK Lock",
-                    "open_status": device.get("openStatus", existing.get("open_status")),
-                    "battery": self._extract_int(
-                        device.get("power") or device.get("battery") or existing.get("battery")
-                    ),
-                    "firmware": device.get("lockFirmwareVersion") or existing.get("firmware"),
-                    "online": str(device.get("online", "1")) == "1",
-                    "rssi": device.get("rssi") or existing.get("rssi"),
-                    "raw": device,
-                }
 
         return parsed_data
 
     @staticmethod
-    def _extract_int(val: Any) -> int | None:
+    def _extract_battery(val: Any) -> int | None:
+        """Extract valid 0-100 battery percentage (ignores 200 placeholder on top-level lock)."""
         if isinstance(val, bool) or val is None:
             return None
+        parsed: int | None = None
         if isinstance(val, (int, float)):
-            return int(val)
-        if isinstance(val, str) and val.strip().isdigit():
-            return int(val.strip())
+            parsed = int(val)
+        elif isinstance(val, str) and val.strip().isdigit():
+            parsed = int(val.strip())
+        if parsed is not None and 0 <= parsed <= 100:
+            return parsed
         return None
 
     def _extract_devices_list(self, payload: Any) -> list[dict[str, Any]]:
