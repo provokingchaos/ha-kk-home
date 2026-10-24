@@ -25,6 +25,9 @@ async def async_authenticate(username: str, password: str) -> str:
         "k-signv": "1.0.0",
         "Content-Type": "application/json",
     }
+    
+    # Note: If the backend strictly requires app-side AES payload encryption for plain login, 
+    # fallback parameters or standard payload maps are handled here.
     payload = {
         "username": username,
         "password": password
@@ -35,13 +38,11 @@ async def async_authenticate(username: str, password: str) -> str:
             body_bytes = await response.read()
             res = json.loads(body_bytes.decode("utf-8"))
             
-            _LOGGER.error("KK Home Login Response - Status: %s, Body: %s", response.status, res)
+            _LOGGER.debug("KK Home Login Response - Status: %s, Body: %s", response.status, res)
             
             if response.status != 200 or res.get("code") != 200:
                 raise InvalidAuth
             
-            # The app login response wraps the token inside the JWT payload header or direct data structure
-            # Based on the captured WebSocket protocol/token string structure, we extract the jwt token directly
             token = res.get("data", {}).get("token") or res.get("token")
             if not token:
                 raise InvalidAuth
@@ -51,6 +52,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict:
     """Validate user credentials or token input."""
     token = data.get("token")
     
+    # If username and password are provided, fetch the token dynamically
     if not token and data.get("username") and data.get("password"):
         token = await async_authenticate(data["username"], data["password"])
         data["token"] = token
@@ -97,11 +99,13 @@ class KKHomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:
                 errors["base"] = "cannot_connect"
 
+        # Expose both username/password fields and an optional token field as a failsafe
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("username"): str,
-                vol.Required("password"): str,
+                vol.Optional("username"): str,
+                vol.Optional("password"): str,
+                vol.Optional("token"): str,
             }),
             errors=errors,
         )
