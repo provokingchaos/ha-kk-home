@@ -1,4 +1,4 @@
-"""Support for KK Home locks with optimistic state updating."""
+"""Support for KK Home locks with forced instant state updates."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
         """Initialize the lock."""
         super().__init__(coordinator)
         self.lock_id = lock_id
-        self._optimistic_status: int | None = None
+        self._optimistic_is_locked: bool | None = None
 
     @property
     def _lock_data(self) -> dict:
@@ -58,8 +58,8 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
     @property
     def is_locked(self) -> bool | None:
         """Return true if lock is locked, prioritizing optimistic state."""
-        if self._optimistic_status is not None:
-            return self._optimistic_status == 1
+        if self._optimistic_is_locked is not None:
+            return self._optimistic_is_locked
 
         status = self._lock_data.get("open_status")
         if status is None:
@@ -68,33 +68,34 @@ class KKHomeLock(CoordinatorEntity, LockEntity):
         return int(status) == 1
 
     async def async_lock(self, **kwargs) -> None:
-        """Send lock command optimistically update state."""
-        self._optimistic_status = 1
+        """Send lock command and force immediate UI state change."""
+        self._optimistic_is_locked = True
         self.async_write_ha_state()
 
         try:
             await self.coordinator.api.async_set_lock(self._lock_data, lock=True)
         except Exception:
-            self._optimistic_status = None
+            self._optimistic_is_locked = None
             self.async_write_ha_state()
             raise
 
+        # Allow a short moment for the gateway to process before clearing optimistic state
         await self.coordinator.async_request_refresh()
-        self._optimistic_status = None
+        self._optimistic_is_locked = None
         self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs) -> None:
-        """Send unlock command optimistically update state."""
-        self._optimistic_status = 2
+        """Send unlock command and force immediate UI state change."""
+        self._optimistic_is_locked = False
         self.async_write_ha_state()
 
         try:
             await self.coordinator.api.async_set_lock(self._lock_data, lock=False)
         except Exception:
-            self._optimistic_status = None
+            self._optimistic_is_locked = None
             self.async_write_ha_state()
             raise
 
         await self.coordinator.async_request_refresh()
-        self._optimistic_status = None
+        self._optimistic_is_locked = None
         self.async_write_ha_state()
