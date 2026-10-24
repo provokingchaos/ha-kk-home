@@ -1,5 +1,6 @@
 """Data update coordinator for KK Home."""
 import logging
+import json
 from datetime import timedelta
 import aiohttp
 
@@ -47,7 +48,14 @@ class KKHomeDataUpdateCoordinator(DataUpdateCoordinator):
                     if response.status != 200:
                         raise UpdateFailed(f"Error communicating with API: Status {response.status}")
                     
-                    data = await response.json()
+                    # Read raw bytes to avoid aiohttp strict content-type JSON checking
+                    body_bytes = await response.read()
+                    response_text = body_bytes.decode("utf-8")
+                    
+                    try:
+                        data = json.loads(response_text)
+                    except json.JSONDecodeError as jde:
+                        raise UpdateFailed(f"Failed to parse API response as JSON: {jde}")
                     
                     if data.get("code") != 200:
                         raise UpdateFailed(f"API returned error: {data.get('msg')}")
